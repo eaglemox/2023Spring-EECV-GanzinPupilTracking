@@ -1,4 +1,6 @@
+# exclude folders
 dataset
-
+__pycache__
+# other random shit
 *.zip
 *.png
