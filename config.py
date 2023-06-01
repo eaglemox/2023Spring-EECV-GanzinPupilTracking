@@ -4,7 +4,7 @@ import argparse
 parser = argparse.ArgumentParser(description='This is our final project')
 
 # hyperparmeters
-parser.add_argument('--max_epoch', type=int, default=40, help='max epochs to train')
+parser.add_argument('--max_epoch', type=int, default=20, help='max epochs to train')
 parser.add_argument('--batch_size', type=int, default=16, help='batch size of training data')
 parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
 parser.add_argument('--decay', type=float, default=1e-5, help='weight decay')

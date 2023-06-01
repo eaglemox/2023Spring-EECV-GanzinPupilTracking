@@ -117,12 +117,12 @@ def cal_batch_metric(predict_batch, label_batch, iou_list, conf_list, validframe
             
         conf_list.append(conf)
 
-def write_txtlog(log_path, current_epoch, train_score, valid_score, train_loss, valid_loss, train_iou, valid_iou, train_atnr, valid_atnr, is_better):
+def write_txtlog(log_path, current_epoch, train_score, valid_score, train_loss, valid_loss, train_wiou, valid_wiou, train_atnr, valid_atnr, is_better):
     with open(log_path, 'a') as f:
-        f.write(f'[{current_epoch+1}/{args.max_epoch}] Score:{train_score}/{valid_score} | Loss:{train_loss}/{valid_loss}\
-                 | IOU:{train_iou}/{valid_iou} | ATNR:{train_atnr}/{valid_atnr}')
+        f.write(f'[{current_epoch+1}/{args.max_epoch}] Score:{train_score:.3f}/{valid_score:.3f} | Loss:{train_loss:.3f}/{valid_loss:.3f} | ') # change line
+        f.write(f'IOU:{train_wiou:.3f}/{valid_wiou:.3f} | ATNR:{train_atnr:.3f}/{valid_atnr:.3f}')
         if is_better:
-            f.wrtie('--> Best Updated')
+            f.write('--> Best Updated')
         f.write('\n')
 
 
@@ -167,7 +167,7 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
             # print(len(train_iou))
 
         # score metrics
-        train_wiou = np.mean(train_iou)
+        train_wiou = np.sum(train_iou) / len(train_validframe)
         train_atnr = np.mean(true_negative_curve(np.array(train_conf), np.array(train_validframe)))
         train_score = 0.7 * train_wiou + 0.3 * train_atnr
         
@@ -194,7 +194,7 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
                 # calculate iou, conf, N_valid
                 cal_batch_metric(preds, masks, train_iou, train_conf, train_validframe)
 
-        valid_wiou = np.mean(valid_iou)
+        valid_wiou = np.sum(valid_iou) / len(valid_validframe)
         valid_atnr = np.mean(true_negative_curve(np.array(valid_conf), np.array(valid_validframe)))
         valid_score = 0.7 * valid_wiou + 0.3 * valid_atnr
         
@@ -219,7 +219,7 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         # write textlog
         os.makedirs(args.log_save, exist_ok=True)
         write_txtlog(os.path.join(args.log_save, 'log.txt'), epoch, train_score, valid_score, train_loss, valid_loss\
-                     , train_iou, valid_iou, train_atnr, valid_atnr, is_better)
+                     , train_wiou, valid_wiou, train_atnr, valid_atnr, is_better)
 
 
 if __name__ == '__main__':
@@ -248,7 +248,8 @@ if __name__ == '__main__':
     '''Model Setting & Summary'''
     model = nn.DataParallel(model, device_ids=[0, 1])
     model.to(device)
-    summary(model, input_size=(3, 240, 320))
+
+    # summary(model, input_size=(3, 240, 320))
     # print(model)
     
     '''Selecting optimizer ...'''
