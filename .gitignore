@@ -1,5 +1,7 @@
-# exclude all
-*
+# exclude folder
+*/
 # other random shit
+*.zip
+
 !.py
 !.sh
