@@ -264,7 +264,10 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         # save model
         if is_better:
             os.makedirs(args.model_save, exist_ok=True)
-            torch.save(model.state_dict(), os.path.join(args.model_save, f'model_best_{epoch}.pth'))
+            if torch.cuda.device_count() > 1:
+                torch.save(model.module.state_dict(), os.path.join(args.model_save, f'model_best_{epoch}.pth'))
+            else:
+                torch.save(model.state_dict(), os.path.join(args.model_save, f'model_best_{epoch}.pth'))
 
         # write textlog
         os.makedirs(args.log_save, exist_ok=True)
@@ -289,7 +292,7 @@ if __name__ == '__main__':
     '''Fix Random Seed'''
     set_seed(2023)
     '''Get DataLoader'''
-    train_loader, valid_loader = get_dataloader(args.datapath, batch_size=args.batch_size, split='train', valid_ratio=0.1)
+    train_loader, valid_loader = get_dataloader(args.data_path, batch_size=args.batch_size, split='train', valid_ratio=0.1)
     # for batch, data in enumerate(train_loader):
     #     print(data['masks'].shape)
         # fig = plt.figure()
@@ -328,29 +331,3 @@ if __name__ == '__main__':
           optimizer=optimizer,
           scheduler=scheduler
           )
-
-
-    '''
-    # This is useless #
-    model.eval()
-    input_image = Image.open('./dataset/S1/01/0.jpg').convert('RGB')
-
-    preprocess = transforms.Compose([
-        transforms.ToTensor(),
-    ])
-    input_tensor = preprocess(input_image)
-    print(input_tensor.shape)
-    input_batch = input_tensor.unsqueeze(0).to(device)
-    
-    with torch.no_grad():
-        output = model(input_batch)
-        print(output.shape)
-    out_np = output.cpu().numpy()
-    print(np.unique(out_np))
-    out = ((out_np -np.min(out_np)) / (np.max(out_np) - np.min(out_np) )* 255).astype(np.uint8)[0, 0]
-    print(out.shape)
-    # cv2.imshow("test", out)
-    # cv2.waitKey(0)
-    im = Image.fromarray(out.transpose(0, 1))
-    im.save('./ans.png')
-    '''

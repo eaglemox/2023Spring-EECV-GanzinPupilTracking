@@ -114,7 +114,8 @@ if __name__ == '__main__':
     model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=True)
     
     '''Model Setting & Summary'''
-    model = nn.DataParallel(model, device_ids=[0, 1])
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model, device_ids=[0, 1]) # enable two GPU parallel
     model.to(device)
     # summary(model, input_size=(3, 240, 320))
     # print(model)
