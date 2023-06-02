@@ -27,12 +27,12 @@ def get_train_path(path='./dataset'):
     image_list = []
     mask_list = []
     print('Acquiring training image & mask path...')
-    for subject in tqdm(os.listdir(data_path)):
+    for subject in tqdm(sorted(os.listdir(data_path))):
         if subject in ['S1', 'S2', 'S3', 'S4']:
-            for sequence in os.listdir(f'{data_path}/{subject}'):
+            for sequence in sorted(os.listdir(f'{data_path}/{subject}')):
                 seq_image = []
                 seq_mask = []
-                for name in os.listdir(f'{data_path}/{subject}/{sequence}'):
+                for name in sorted(os.listdir(f'{data_path}/{subject}/{sequence}')):
                     ext = os.path.splitext(name)[-1]
                     fullpath = f'{data_path}/{subject}/{sequence}/{name}'
                     if ext == '.jpg':
@@ -47,18 +47,28 @@ def get_train_path(path='./dataset'):
 def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
     image_path, mask_path = get_train_path(data_dir)
     if split == 'train':
-        transform = transforms.Compose([
+        img_transform = transforms.Compose([
+            transforms.Resize((240, 320)),
+            transforms.RandomEqualize(p=1.0),
+            transforms.ToTensor(),
+            # TODO: add other augmentations
+        ])
+        mask_transform = transforms.Compose([
             transforms.Resize((240, 320)),
             transforms.ToTensor(),
             # TODO: add other augmentations
         ])
     else:
-        transform = transforms.Compose([
+        img_transform = transforms.Compose([
             transforms.Resize((240, 320)),
             transforms.ToTensor(),
         ])
-    
-    dataset = GanzinDataset(image_path, mask_path, transform)
+        mask_transform = transforms.Compose([
+            transforms.Resize((240, 320)),
+            transforms.ToTensor(),
+        ])    
+    dataset = GanzinDataset(image_path, mask_path, img_transform, mask_transform)
+
     if split == 'train':
         num_valid = round(len(dataset) * valid_ratio)
         num_train = len(dataset) - num_valid
@@ -72,10 +82,11 @@ def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
 
 
 class GanzinDataset(Dataset):
-    def __init__(self, image_paths, mask_paths, transform):
+    def __init__(self, image_paths, mask_paths, img_transform, mask_transform):
         self.image_paths = image_paths
         self.mask_paths = mask_paths
-        self.transforms = transform
+        self.img_transforms = img_transform
+        self.mask_transforms = mask_transform
 
     def __len__(self):
         if len(self.image_paths) == len(self.mask_paths):
@@ -90,8 +101,8 @@ class GanzinDataset(Dataset):
 
         mask = mask_temp.split()[0] # origin pupil mask is [255, 0, 255]-> magenta
         # print(mask.size)
-        image = self.transforms(image)
-        mask = self.transforms(mask)
+        image = self.img_transforms(image)
+        mask = self.mask_transforms(mask)
 
         return {
             'images': image,
@@ -107,7 +118,8 @@ def cal_batch_metric(predict_batch, label_batch, iou_list, conf_list, validframe
         predict = predict_batch[batch]
         label = label_batch[batch]
         # threshold predict, 0/~1
-        np.where(predict > 0.99, 1, 0)
+        predict_threshold = 0.99
+        predict = np.where(predict > predict_threshold, 1, 0)
         if np.sum(predict) > 0:
             conf = 1.0
             # mask_iou input shape (h, w, c)
@@ -132,6 +144,16 @@ def write_txtlog(log_path, current_epoch, train_score, valid_score, train_loss, 
             f.write('--> Best Updated')
         f.write('\n')
 
+def plot_learning_curve(results):
+    for key, value in results.items():
+        plt.plot(range(len(value)), value, label=f'{key}')
+        plt.xlabel('Epoch')
+        plt.ylabel(f'{key}')
+        plt.title(f'Learning curve of {key}')
+        plt.legend()
+
+        plt.savefig(os.path.join(args.log_save, f'{key}.png'))
+        plt.close()
 
 def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=None):
     # list for learning curve
@@ -238,14 +260,25 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         # check & update best loss
         is_better = valid_loss <= best_loss
         best_loss = valid_loss
+
         # save model
         if is_better:
             os.makedirs(args.model_save, exist_ok=True)
             torch.save(model.state_dict(), os.path.join(args.model_save, f'model_best_{epoch}.pth'))
+
         # write textlog
         os.makedirs(args.log_save, exist_ok=True)
         write_txtlog(os.path.join(args.log_save, 'log.txt'), epoch, train_score, valid_score, train_loss, valid_loss\
                      , train_wiou, valid_wiou, train_atnr, valid_atnr, is_better)
+        
+        # plot learning curve (every epoch)
+        result_lists = {
+                'train_score': train_score_list,
+                'train_loss': train_loss_list,
+                'valid_score': valid_score_list,
+                'valid_loss': valid_loss_list
+            }
+        plot_learning_curve(result_lists)
 
 
 if __name__ == '__main__':

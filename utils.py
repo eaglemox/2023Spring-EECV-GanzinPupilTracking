@@ -49,9 +49,9 @@ if __name__ == '__main__':
     dpi = matplotlib.rcParams['figure.dpi']
     fig = plt.figure(figsize=(w / dpi, h / dpi))
     ax = fig.add_axes([0, 0, 1, 1])
-    for idx in range(nr_image):
-        image_name = os.path.join(dataset_path, f'{idx}.jpg')
-        label_name = os.path.join(dataset_path, f'{idx}.png')
+    for batch in range(nr_image):
+        image_name = os.path.join(dataset_path, f'{batch}.jpg')
+        label_name = os.path.join(dataset_path, f'{batch}.png')
         image = cv2.imread(image_name)
         label = cv2.imread(label_name)
         blended = alpha_blend(image, label, 0.5)
