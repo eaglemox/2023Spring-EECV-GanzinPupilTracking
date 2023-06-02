@@ -307,7 +307,8 @@ if __name__ == '__main__':
     # model.outc.conv = Conv2d(64, 1, kernel_size=(1, 1), stride=(1, 1)) # unet_carvana outpur is 4 channel
     
     '''Model Setting & Summary'''
-    model = nn.DataParallel(model, device_ids=[0, 1])
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model, device_ids=[0, 1]) # enable two GPU parallel
     model.to(device)
 
     # summary(model, input_size=(3, 240, 320))
