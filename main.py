@@ -18,6 +18,9 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torch.optim.lr_scheduler import CyclicLR, CosineAnnealingLR
 from torchvision import transforms
 
+def set_seed(seed=0):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
 def get_train_path(path='./dataset'):
     data_path = path
@@ -86,7 +89,7 @@ class GanzinDataset(Dataset):
         mask_temp = Image.open(self.mask_paths[idx])
 
         mask = mask_temp.split()[0] # origin pupil mask is [255, 0, 255]-> magenta
-
+        # print(mask.size)
         image = self.transforms(image)
         mask = self.transforms(mask)
 
@@ -100,27 +103,31 @@ def cal_batch_metric(predict_batch, label_batch, iou_list, conf_list, validframe
     label_batch = label_batch.cpu().detach().numpy()
 
     for batch in range(predict_batch.shape[0]):
+        # shape (c, h, w)
         predict = predict_batch[batch]
         label = label_batch[batch]
-
+        # threshold predict, 0/~1
+        np.where(predict > 0.99, 1, 0)
         if np.sum(predict) > 0:
             conf = 1.0
-            iou = mask_iou(predict, label)
+            # mask_iou input shape (h, w, c)
+            iou = mask_iou(predict.transpose(1, 2, 0), label.transpose(1, 2, 0))
             iou_list.append(conf * iou)
         else:  # empty ground truth label
             conf = 0.0
+
+        conf_list.append(conf)
 
         if np.sum(label) > 0:
             validframe_list.append(1.0)
         else:  # empty ground truth label
             validframe_list.append(0.0)
             
-        conf_list.append(conf)
 
 def write_txtlog(log_path, current_epoch, train_score, valid_score, train_loss, valid_loss, train_wiou, valid_wiou, train_atnr, valid_atnr, is_better):
     with open(log_path, 'a') as f:
-        f.write(f'[{current_epoch+1}/{args.max_epoch}] Score:{train_score:.3f}/{valid_score:.3f} | Loss:{train_loss:.3f}/{valid_loss:.3f} | ') # change line
-        f.write(f'IOU:{train_wiou:.3f}/{valid_wiou:.3f} | ATNR:{train_atnr:.3f}/{valid_atnr:.3f}')
+        f.write(f'[{current_epoch+1}/{args.max_epoch}] Score:{train_score:.5f}/{valid_score:.5f} | Loss:{train_loss:.5f}/{valid_loss:.5f} | ') # change line
+        f.write(f'IOU:{train_wiou:.5f}/{valid_wiou:.5f} | ATNR:{train_atnr:.5f}/{valid_atnr:.5f}')
         if is_better:
             f.write('--> Best Updated')
         f.write('\n')
@@ -150,10 +157,28 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
             images, masks = data['images'].to(device), data['masks'].to(device)
             # print(images.dtype, masks.dtype)
             # print(images.shape, masks.shape)
+
+            # print(f'label:{torch.unique(masks[0])}')
             preds = model(images) # [batch, 1, h, w]
+            # check predict value distribution
+            # for img in range(preds.shape[0]):
+            #     print(f'pred:{torch.unique(preds[0])}')
+            #     print(f'{img}')
+            #     print(f'small count:{torch.count_nonzero(preds[img] < .99)}, large count:{torch.count_nonzero(preds[img] > .99)}')
+            #     torch.count_nonzero(preds[img] > 0) == 0
+            #     if True:
+            #         plt.subplot(1, 3, 1)
+            #         plt.imshow(images[img, 0].cpu().detach().numpy())
+            #         plt.subplot(1, 3, 2)
+            #         plt.imshow(masks[img, 0].cpu().detach().numpy())
+            #         plt.subplot(1, 3, 3)
+            #         plt.imshow(preds[img, 0].cpu().detach().numpy())
+                    
+            #         plt.show()
+            
             # print(preds.shape)
             loss = criterion(preds, masks)
-
+            # print(f'loss:{loss:.3f}')
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -171,6 +196,7 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         train_atnr = np.mean(true_negative_curve(np.array(train_conf), np.array(train_validframe)))
         train_score = 0.7 * train_wiou + 0.3 * train_atnr
         
+        train_loss = train_loss / len(train_loader)
         train_loss_list.append(train_loss)
         train_score_list.append(train_score)
         train_time = time() - train_start_time
@@ -192,19 +218,19 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
                 valid_loss += loss.item()
 
                 # calculate iou, conf, N_valid
-                cal_batch_metric(preds, masks, train_iou, train_conf, train_validframe)
+                cal_batch_metric(preds, masks, valid_iou, valid_conf, valid_validframe)
 
         valid_wiou = np.sum(valid_iou) / len(valid_validframe)
         valid_atnr = np.mean(true_negative_curve(np.array(valid_conf), np.array(valid_validframe)))
         valid_score = 0.7 * valid_wiou + 0.3 * valid_atnr
         
+        valid_loss = valid_loss / len(valid_loader)
         valid_loss_list.append(valid_loss)
         valid_score_list.append(valid_score)
         valid_time = time() - valid_start_time
 
         # print each epoch's result: loss, score
-        print(f'[{epoch + 1}/{args.max_epoch}] \
-              {train_time:.2f}/{valid_time:.2f} sec(s) Score: {train_score:.3f}/{valid_score:.3f} | Loss: {train_loss:.3f}/{valid_loss:.3f}')
+        print(f'[{epoch + 1}/{args.max_epoch}] {train_time:.2f}/{valid_time:.2f} sec(s) Score: {train_score:.3f}/{valid_score:.3f} | Loss: {train_loss:.3f}/{valid_loss:.3f}')
         
         # update scheduler
         scheduler.step()
@@ -227,6 +253,8 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Device:', device)
     
+    '''Fix Random Seed'''
+    set_seed(2023)
     '''Get DataLoader'''
     train_loader, valid_loader = get_dataloader(args.datapath, batch_size=args.batch_size, split='train', valid_ratio=0.1)
     # for batch, data in enumerate(train_loader):

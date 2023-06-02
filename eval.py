@@ -32,6 +32,7 @@ def mask_iou(mask1: np.ndarray, mask2: np.ndarray):
         mask1: 1st segmentation mask
         mask2: 2nd segmentation mask
     """
+    # mask (h, w, c)
     # axis -1 should be channel axis, thus masks are 2d (h, w) masks
     if len(mask1.shape) == 3:
         mask1 = mask1.sum(axis=-1)

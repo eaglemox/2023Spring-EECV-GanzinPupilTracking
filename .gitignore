@@ -1,6 +1,5 @@
-# exclude folders
-dataset
-__pycache__
+# exclude all
+*
 # other random shit
-*.zip
-*.png
+!.py
+!.sh
