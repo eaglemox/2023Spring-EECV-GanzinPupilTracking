@@ -40,7 +40,15 @@ if __name__ == '__main__':
     import cv2
     import matplotlib
     import matplotlib.pyplot as plt
-    dataset_path = r'./dataset/S1/01'
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-S', '--subject', default='1')
+    parser.add_argument('-Q', '--sequence', default='01')
+    args = parser.parse_args()
+
+    dataset_path = fr'.\dataset\S{args.subject}\{args.sequence}'
+    mask_path = fr'.\S14_mask\S{args.subject}\{args.sequence}'
     nr_image = len([name for name in os.listdir(dataset_path) if name.endswith('.jpg')])
     print(nr_image)
     image = cv2.imread(os.path.join(dataset_path, '0.jpg'))
@@ -51,7 +59,7 @@ if __name__ == '__main__':
     ax = fig.add_axes([0, 0, 1, 1])
     for batch in range(nr_image):
         image_name = os.path.join(dataset_path, f'{batch}.jpg')
-        label_name = os.path.join(dataset_path, f'{batch}.png')
+        label_name = os.path.join(mask_path, f'{batch}.png')
         image = cv2.imread(image_name)
         label = cv2.imread(label_name)
         blended = alpha_blend(image, label, 0.5)
