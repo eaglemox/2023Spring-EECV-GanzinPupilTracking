@@ -1,9 +1,10 @@
 import os
-import gc
 import torch
 import numpy as np
 import torch.nn as nn
 import matplotlib.pyplot as plt
+import albumentations as A
+
 
 from loss import *
 from eval import *
@@ -17,6 +18,7 @@ from torch.nn import Conv2d
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.optim.lr_scheduler import CyclicLR, CosineAnnealingLR
 from torchvision import transforms
+from albumentations.pytorch.transforms import ToTensorV2
 
 def set_seed(seed=0):
     np.random.seed(seed)
@@ -30,8 +32,6 @@ def get_train_path(path='./dataset'):
     for subject in tqdm(sorted(os.listdir(data_path))):
         if subject in ['S1', 'S2', 'S3', 'S4']:
             for sequence in sorted(os.listdir(f'{data_path}/{subject}')):
-                seq_image = []
-                seq_mask = []
                 for name in sorted(os.listdir(f'{data_path}/{subject}/{sequence}')):
                     ext = os.path.splitext(name)[-1]
                     fullpath = f'{data_path}/{subject}/{sequence}/{name}'
@@ -39,22 +39,43 @@ def get_train_path(path='./dataset'):
                         image_list.append(fullpath)
                     elif ext == '.png':
                         mask_list.append(fullpath)
-                # image_list.append(seq_image)
-                # mask_list.append(seq_mask)
+
     print(f'Number of image:{len(image_list)}, mask:{len(mask_list)}')
     return np.array(image_list), np.array(mask_list)
 
 def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
     image_path, mask_path = get_train_path(data_dir)
     if split == 'train':
+        transform = A.Compose([
+            A.Resize(240, 320),
+            A.Rotate(limit=20, p=0.3, border_mode=cv2.BORDER_CONSTANT),
+            A.HorizontalFlip(p=0.3),
+            A.VerticalFlip(p=0.3),
+            A.RandomGamma(gamma_limit=(40, 40), p=1.0) # 40 mean gamma = 40 / 100 = 0.4
+            # A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.3, border_mode=cv2.BORDER_CONSTANT),
+            # A.Equalize(p=0.3),
+            # A.HueSaturationValue(p=0.4),
+            # # A.Sharpen(p=0.3),
+            # A.RandomBrightnessContrast(brightness_limit=0.4, contrast_limit=0.4, p=0.3),
+            # ToTensorV2(),
+
+            ])
+                                
         img_transform = transforms.Compose([
             transforms.Resize((240, 320)),
             transforms.RandomEqualize(p=1.0),
+            transforms.RandomRotation(20),
+            transforms.RandomHorizontalFlip(p=0.3),
+            transforms.RandomVerticalFlip(p=0.3),
+            transforms.ColorJitter(brightness=0.3, contrast= 0.5),
             transforms.ToTensor(),
             # TODO: add other augmentations
         ])
         mask_transform = transforms.Compose([
             transforms.Resize((240, 320)),
+            transforms.RandomRotation(20),
+            transforms.RandomHorizontalFlip(p=0.3),
+            transforms.RandomVerticalFlip(p=0.3),
             transforms.ToTensor(),
             # TODO: add other augmentations
         ])
@@ -67,7 +88,7 @@ def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
             transforms.Resize((240, 320)),
             transforms.ToTensor(),
         ])    
-    dataset = GanzinDataset(image_path, mask_path, img_transform, mask_transform)
+    dataset = GanzinDataset(image_path, mask_path, transform, img_transform, mask_transform)
 
     if split == 'train':
         num_valid = round(len(dataset) * valid_ratio)
@@ -82,9 +103,10 @@ def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
 
 
 class GanzinDataset(Dataset):
-    def __init__(self, image_paths, mask_paths, img_transform, mask_transform):
+    def __init__(self, image_paths, mask_paths, transform, img_transform, mask_transform):
         self.image_paths = image_paths
         self.mask_paths = mask_paths
+        self.transform = transform
         self.img_transforms = img_transform
         self.mask_transforms = mask_transform
 
@@ -100,9 +122,14 @@ class GanzinDataset(Dataset):
         mask_temp = Image.open(self.mask_paths[idx])
 
         mask = mask_temp.split()[0] # origin pupil mask is [255, 0, 255]-> magenta
-        # print(mask.size)
-        image = self.img_transforms(image)
-        mask = self.mask_transforms(mask)
+
+        # torch return
+        # image = self.img_transforms(image)
+        # mask = self.mask_transforms(mask)
+
+        trans = transforms.Compose([transforms.ToTensor()])
+        transformed = self.transform(image=np.array(image), mask=np.array(mask))
+        image, mask = trans(transformed['image']), trans(transformed['mask'])
 
         return {
             'images': image,
@@ -174,7 +201,7 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         train_conf = []
         train_validframe = []
         
-        for batch, data in enumerate(tqdm(train_loader, leave=True)):
+        for batch, data in enumerate(tqdm(train_loader)):
             # [batch, 3, h, w], [batch, 1, h, w]
             images, masks = data['images'].to(device), data['masks'].to(device)
             # print(images.dtype, masks.dtype)
@@ -314,12 +341,14 @@ if __name__ == '__main__':
         model = nn.DataParallel(model, device_ids=[0, 1]) # enable two GPU parallel
     model.to(device)
 
+    # Show summary
     # summary(model, input_size=(3, 240, 320))
     # print(model)
     
     '''Selecting optimizer ...'''
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.decay)
-    criterion = DiceLoss()
+    criterion = DiceCeLoss(dice_weight=0.7)
+    # nn.BCEWithLogitsLoss()
     # nn.CrossEntropyLoss()
     scheduler = CosineAnnealingLR(optimizer, T_max=args.max_epoch)
     
@@ -329,5 +358,5 @@ if __name__ == '__main__':
           valid_loader=valid_loader,
           criterion=criterion,
           optimizer=optimizer,
-          scheduler=scheduler
+          scheduler=scheduler,
           )

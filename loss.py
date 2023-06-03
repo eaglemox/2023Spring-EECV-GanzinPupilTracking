@@ -19,3 +19,16 @@ class DiceLoss(nn.Module):
         dice = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
         
         return 1 - dice
+
+class DiceCeLoss(nn.Module):
+    def __init__(self, dice_weight):
+        super(DiceCeLoss, self).__init__()
+        self.dice_weight = dice_weight
+        self.ce_loss = torch.nn.CrossEntropyLoss()
+    
+    def forward(self, pred, target):
+        loss_dice = self.dice_loss(pred, target)
+        loss_ce = self.ce_loss(pred, target)
+        loss = (1 - self.dice_weight) * loss_ce + self.dice_weight * loss_dice
+
+        return loss

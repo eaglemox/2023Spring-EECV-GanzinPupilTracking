@@ -22,10 +22,10 @@ def get_sequence_path(path='./dataset'):
     image_list = []
     seq_length = len([seq for seq in os.listdir(data_path)])
     for seq in range(seq_length):
-        sequence_path = f'{data_path}\{seq + 1:02d}'
+        sequence_path = f'{data_path}/{seq + 1:02d}'
         img_length = len([name for name in os.listdir(sequence_path) if name.endswith('.jpg')])
         for index in range(img_length):
-            fullpath = f'{sequence_path}\{index}.jpg'
+            fullpath = f'{sequence_path}/{index}.jpg'
             image_list.append(fullpath)
 
     print(f'Number of image:{len(image_list)}')
@@ -85,11 +85,11 @@ if __name__ == '__main__':
     model.to(device)
 
     '''Inference S5-S8'''
-    data_path = r'.\dataset'
-    output_path = r'.\test'
+    data_path = './dataset'
+    output_path = './solution_4'
     # read to sequence level
-    for subject in ['S1', 'S2', 'S3', 'S4']:
-    # for subject in ['S5', 'S6', 'S7', 'S8']:
+    # for subject in ['S1', 'S2', 'S3', 'S4']:
+    for subject in ['S5', 'S6', 'S7', 'S8']:
         print(f'Processing {subject}...')
         subject_path = os.path.join(data_path, subject)
         inference_loader = get_inference_dataloader(subject_path,batch_size)
