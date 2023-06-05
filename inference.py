@@ -76,7 +76,7 @@ if __name__ == '__main__':
     model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=False)
     
     '''Read Parameters (.pth)'''
-    best_model = './model_best_97.pth'
+    best_model = './test7/model_best_47.pth'
     # print(torch.load(best_model))
     model.load_state_dict(torch.load(best_model))
     
@@ -86,10 +86,10 @@ if __name__ == '__main__':
 
     '''Inference S5-S8'''
     data_path = './dataset'
-    output_path = './solution_4'
+    output_path = './mask_7'
     # read to sequence level
-    # for subject in ['S1', 'S2', 'S3', 'S4']:
-    for subject in ['S5', 'S6', 'S7', 'S8']:
+    for subject in ['S1', 'S2', 'S3', 'S4']:
+    # for subject in ['S5', 'S6', 'S7', 'S8']:
         print(f'Processing {subject}...')
         subject_path = os.path.join(data_path, subject)
         inference_loader = get_inference_dataloader(subject_path,batch_size)
@@ -122,9 +122,10 @@ if __name__ == '__main__':
                     mask = np.zeros((h, w, 3))
                     mask[:, :, 0] = predict[0]
                     mask[:, :, 2] = predict[0]
-                    mask = (mask * 255).astype(np.uint8)
-                    
                     mask = cv2.resize(mask, (640, 480), interpolation=cv2.INTER_CUBIC)
+                    mask = np.where(mask > 0.99, 255, 0).astype(np.uint8)
+                    # print(np.unique(mask))
+                    # mask = (mask * 255).astype(np.uint8)
                     
                     # save mask.png
                     save_path = file_path.replace('.jpg', '.png').replace(data_path, output_path)

@@ -7,18 +7,23 @@ import albumentations as A
 
 
 from loss import *
+# from losses import *
 from eval import *
 from utils import *
+# from bl_utils import *
 from config import args
 from PIL import Image
 from time import time
 from tqdm import tqdm
 from torchsummary import summary
 from torch.nn import Conv2d
+from torch.nn.functional import softmax
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.optim.lr_scheduler import CyclicLR, CosineAnnealingLR
 from torchvision import transforms
 from albumentations.pytorch.transforms import ToTensorV2
+
+plt.switch_backend('agg')
 
 def set_seed(seed=0):
     np.random.seed(seed)
@@ -51,7 +56,8 @@ def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
             A.Rotate(limit=20, p=0.3, border_mode=cv2.BORDER_CONSTANT),
             A.HorizontalFlip(p=0.3),
             A.VerticalFlip(p=0.3),
-            A.RandomGamma(gamma_limit=(40, 40), p=1.0) # 40 mean gamma = 40 / 100 = 0.4
+            A.RandomGamma(gamma_limit=(20, 60), p=1.0), # 40 mean gamma = 40 / 100 = 0.4
+            A.Normalize(mean=0.5, std=0.5),
             # A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.3, border_mode=cv2.BORDER_CONSTANT),
             # A.Equalize(p=0.3),
             # A.HueSaturationValue(p=0.4),
@@ -126,11 +132,10 @@ class GanzinDataset(Dataset):
         # torch return
         # image = self.img_transforms(image)
         # mask = self.mask_transforms(mask)
-
         trans = transforms.Compose([transforms.ToTensor()])
         transformed = self.transform(image=np.array(image), mask=np.array(mask))
         image, mask = trans(transformed['image']), trans(transformed['mask'])
-
+        
         return {
             'images': image,
             'masks': mask
@@ -209,6 +214,7 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
 
             # print(f'label:{torch.unique(masks[0])}')
             preds = model(images) # [batch, 1, h, w]
+
             # check predict value distribution
             # for img in range(preds.shape[0]):
             #     print(f'pred:{torch.unique(preds[0])}')
@@ -262,6 +268,7 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
                 images, masks = data['images'].to(device), data['masks'].to(device)
                 
                 preds = model(images)
+
                 loss = criterion(preds, masks)
 
                 valid_loss += loss.item()
@@ -331,7 +338,8 @@ if __name__ == '__main__':
 
     '''Pretrained Model Selection'''
     # https://github.com/mateuszbuda/brain-segmentation-pytorch
-    model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=True)
+    model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=False)
+    # model.conv = Conv2d(32, 2, kernel_size=1)
     # https://github.com/milesial/Pytorch-UNet
     # model = torch.hub.load('milesial/Pytorch-UNet', 'unet_carvana', pretrained=True, scale=0.5)
     # model.outc.conv = Conv2d(64, 1, kernel_size=(1, 1), stride=(1, 1)) # unet_carvana outpur is 4 channel
@@ -347,7 +355,9 @@ if __name__ == '__main__':
     
     '''Selecting optimizer ...'''
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.decay)
-    criterion = DiceCeLoss(dice_weight=0.7)
+    criterion = DiceCeLoss(dice_weight=0.5)
+    # GeneralizedDice(idc=[0])
+    # BinaryDiceLoss()
     # nn.BCEWithLogitsLoss()
     # nn.CrossEntropyLoss()
     scheduler = CosineAnnealingLR(optimizer, T_max=args.max_epoch)

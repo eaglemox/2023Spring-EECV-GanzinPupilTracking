@@ -48,7 +48,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     dataset_path = f'./dataset/S{args.subject}/{args.sequence}'
-    mask_path = f'./mask_4/S{args.subject}/{args.sequence}'
+    mask_path = f'./solution_7/S{args.subject}/{args.sequence}'
     nr_image = len([name for name in os.listdir(dataset_path) if name.endswith('.jpg')])
     print(nr_image)
     image = cv2.imread(os.path.join(dataset_path, '0.jpg'))

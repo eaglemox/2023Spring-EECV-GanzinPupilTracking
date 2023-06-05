@@ -47,7 +47,7 @@ def mask_iou(mask1: np.ndarray, mask2: np.ndarray):
     return area_inter / area_union
 
 
-def benchmark(dataset_path: str, subjects: list):
+def benchmark(dataset_path: str, output_path:str, subjects: list):
     """Compute the weighted IoU and average true negative rate
     Args:
         dataset_path: the dataset path
@@ -64,6 +64,7 @@ def benchmark(dataset_path: str, subjects: list):
     for subject in subjects:
         for action_number in range(26):
             image_folder = os.path.join(dataset_path, subject, f'{action_number + 1:02d}')
+            predict_folder = os.path.join(predict_path, subject, f'{action_number + 1:02d}')
             sequence_idx += 1
             nr_image = len([name for name in os.listdir(image_folder) if name.endswith('.jpg')])
             iou_meter_sequence.reset()
@@ -71,15 +72,20 @@ def benchmark(dataset_path: str, subjects: list):
             if not os.path.exists(label_name):
                 print(f'Labels are not available for {image_folder}')
                 continue
+            # open ./output/SX/XX/conf.txt
+            f = open(f'{predict_folder}/conf.txt', 'r')
             for idx in tqdm(range(nr_image), desc=f'[{sequence_idx:03d}] {image_folder}'):
-                image_name = os.path.join(image_folder, f'{idx}.jpg')
+                predict_name = os.path.join(predict_folder, f'{idx}.png')
                 label_name = os.path.join(image_folder, f'{idx}.png')
-                image = cv2.imread(image_name)
+                image = cv2.imread(predict_name)
                 label = cv2.imread(label_name)
+                
                 # TODO: Modify the code below to run your method or load your results from disk
                 # output, conf = my_awesome_algorithm(image)
-                output = label
-                conf = 1.0
+                output = image
+                conf = float(f.readline())
+                # print(conf)
+
                 if np.sum(label.flatten()) > 0:
                     label_validity.append(1.0)
                     iou = mask_iou(output, label)
@@ -101,6 +107,8 @@ def benchmark(dataset_path: str, subjects: list):
 
 
 if __name__ == '__main__':
-    dataset_path = r'D:\CV23_Ganzin_final_project\dataset\public'
+    dataset_path = './dataset'
+    predict_path = './mask_7'
     subjects = ['S1', 'S2', 'S3', 'S4']
-    benchmark(dataset_path, subjects)
+    # evaluate predict images from inference.py 
+    benchmark(dataset_path, predict_path, subjects)
