@@ -2,65 +2,16 @@ import os
 import torch
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 
 from loss import *
 from eval import *
 from utils import *
+from post import *
 from PIL import Image
 from tqdm import tqdm
-from torchsummary import summary
+from dataset import get_inference_dataloader
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-
-def set_seed(seed=0):
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-def get_sequence_path(path='./dataset'):
-    data_path = path
-    image_list = []
-    seq_length = len([seq for seq in os.listdir(data_path)])
-    for seq in range(seq_length):
-        sequence_path = f'{data_path}/{seq + 1:02d}'
-        img_length = len([name for name in os.listdir(sequence_path) if name.endswith('.jpg')])
-        for index in range(img_length):
-            fullpath = f'{sequence_path}/{index}.jpg'
-            image_list.append(fullpath)
-
-    print(f'Number of image:{len(image_list)}')
-    
-    return np.array(image_list)
-
-def get_inference_dataloader(data_dir, batch_size):
-    image_paths = get_sequence_path(data_dir)
-
-    transform = transforms.Compose([
-        transforms.Resize((240 ,320)),
-        transforms.ToTensor(),
-    ])
-    dataset = InferenceGanzinDataset(image_paths, transform)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True, drop_last=False)
-
-    return dataloader
-
-class InferenceGanzinDataset(Dataset):
-    def __init__(self, image_paths, transform):
-        self.image_paths = image_paths
-        self.img_transforms = transform
-
-    def __len__(self):
-        return len(self.image_paths)
-        
-    def __getitem__(self, idx):
-        image = Image.open(self.image_paths[idx]).convert('RGB')
-
-        image = self.img_transforms(image)
-
-        return {
-            'images': image,
-            'paths': self.image_paths[idx]
-        }
 
 if __name__ == '__main__':
     '''Choose Device'''
@@ -76,7 +27,7 @@ if __name__ == '__main__':
     model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=False)
     
     '''Read Parameters (.pth)'''
-    best_model = './test7/model_best_47.pth'
+    best_model = './test8/model_best_49.pth'
     # print(torch.load(best_model))
     model.load_state_dict(torch.load(best_model))
     
@@ -86,7 +37,7 @@ if __name__ == '__main__':
 
     '''Inference S5-S8'''
     data_path = './dataset'
-    output_path = './mask_7'
+    output_path = './mask_t2'
     # read to sequence level
     for subject in ['S1', 'S2', 'S3', 'S4']:
     # for subject in ['S5', 'S6', 'S7', 'S8']:
@@ -122,8 +73,12 @@ if __name__ == '__main__':
                     mask = np.zeros((h, w, 3))
                     mask[:, :, 0] = predict[0]
                     mask[:, :, 2] = predict[0]
+
                     mask = cv2.resize(mask, (640, 480), interpolation=cv2.INTER_CUBIC)
                     mask = np.where(mask > 0.99, 255, 0).astype(np.uint8)
+
+                    # mask, conf = post(mask)
+
                     # print(np.unique(mask))
                     # mask = (mask * 255).astype(np.uint8)
                     

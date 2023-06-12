@@ -3,143 +3,21 @@ import torch
 import numpy as np
 import torch.nn as nn
 import matplotlib.pyplot as plt
-import albumentations as A
-
 
 from loss import *
-# from losses import *
 from eval import *
 from utils import *
-# from bl_utils import *
 from config import args
-from PIL import Image
 from time import time
 from tqdm import tqdm
-from torchsummary import summary
 from torch.nn import Conv2d
+from torchsummary import summary
+from datasets import get_dataloader
 from torch.nn.functional import softmax
-from torch.utils.data import Dataset, DataLoader, random_split
 from torch.optim.lr_scheduler import CyclicLR, CosineAnnealingLR
-from torchvision import transforms
 from albumentations.pytorch.transforms import ToTensorV2
 
 plt.switch_backend('agg')
-
-def set_seed(seed=0):
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-def get_train_path(path='./dataset'):
-    data_path = path
-    image_list = []
-    mask_list = []
-    print('Acquiring training image & mask path...')
-    for subject in tqdm(sorted(os.listdir(data_path))):
-        if subject in ['S1', 'S2', 'S3', 'S4']:
-            for sequence in sorted(os.listdir(f'{data_path}/{subject}')):
-                for name in sorted(os.listdir(f'{data_path}/{subject}/{sequence}')):
-                    ext = os.path.splitext(name)[-1]
-                    fullpath = f'{data_path}/{subject}/{sequence}/{name}'
-                    if ext == '.jpg':
-                        image_list.append(fullpath)
-                    elif ext == '.png':
-                        mask_list.append(fullpath)
-
-    print(f'Number of image:{len(image_list)}, mask:{len(mask_list)}')
-    return np.array(image_list), np.array(mask_list)
-
-def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
-    image_path, mask_path = get_train_path(data_dir)
-    if split == 'train':
-        transform = A.Compose([
-            A.Resize(240, 320),
-            A.Rotate(limit=20, p=0.3, border_mode=cv2.BORDER_CONSTANT),
-            A.HorizontalFlip(p=0.3),
-            A.VerticalFlip(p=0.3),
-            A.RandomGamma(gamma_limit=(20, 60), p=1.0), # 40 mean gamma = 40 / 100 = 0.4
-            A.Normalize(mean=0.5, std=0.5),
-            # A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.3, border_mode=cv2.BORDER_CONSTANT),
-            # A.Equalize(p=0.3),
-            # A.HueSaturationValue(p=0.4),
-            # # A.Sharpen(p=0.3),
-            # A.RandomBrightnessContrast(brightness_limit=0.4, contrast_limit=0.4, p=0.3),
-            # ToTensorV2(),
-
-            ])
-                                
-        img_transform = transforms.Compose([
-            transforms.Resize((240, 320)),
-            transforms.RandomEqualize(p=1.0),
-            transforms.RandomRotation(20),
-            transforms.RandomHorizontalFlip(p=0.3),
-            transforms.RandomVerticalFlip(p=0.3),
-            transforms.ColorJitter(brightness=0.3, contrast= 0.5),
-            transforms.ToTensor(),
-            # TODO: add other augmentations
-        ])
-        mask_transform = transforms.Compose([
-            transforms.Resize((240, 320)),
-            transforms.RandomRotation(20),
-            transforms.RandomHorizontalFlip(p=0.3),
-            transforms.RandomVerticalFlip(p=0.3),
-            transforms.ToTensor(),
-            # TODO: add other augmentations
-        ])
-    else:
-        img_transform = transforms.Compose([
-            transforms.Resize((240, 320)),
-            transforms.ToTensor(),
-        ])
-        mask_transform = transforms.Compose([
-            transforms.Resize((240, 320)),
-            transforms.ToTensor(),
-        ])    
-    dataset = GanzinDataset(image_path, mask_path, transform, img_transform, mask_transform)
-
-    if split == 'train':
-        num_valid = round(len(dataset) * valid_ratio)
-        num_train = len(dataset) - num_valid
-        train_set, valid_set = random_split(dataset, [num_train, num_valid])
-        train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
-        valid_loader = DataLoader(valid_set, batch_size=1, shuffle=False, num_workers=4, pin_memory=True)
-        return train_loader, valid_loader
-    else:
-        dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True, drop_last=False)
-        return dataloader
-
-
-class GanzinDataset(Dataset):
-    def __init__(self, image_paths, mask_paths, transform, img_transform, mask_transform):
-        self.image_paths = image_paths
-        self.mask_paths = mask_paths
-        self.transform = transform
-        self.img_transforms = img_transform
-        self.mask_transforms = mask_transform
-
-    def __len__(self):
-        if len(self.image_paths) == len(self.mask_paths):
-            return len(self.image_paths)
-        else:
-            print('Number of images and mask does not match!')
-            return np.min(len(self.image_paths), len(self.mask_paths))
-        
-    def __getitem__(self, idx):
-        image = Image.open(self.image_paths[idx]).convert('RGB')
-        mask_temp = Image.open(self.mask_paths[idx])
-
-        mask = mask_temp.split()[0] # origin pupil mask is [255, 0, 255]-> magenta
-
-        # torch return
-        # image = self.img_transforms(image)
-        # mask = self.mask_transforms(mask)
-        trans = transforms.Compose([transforms.ToTensor()])
-        transformed = self.transform(image=np.array(image), mask=np.array(mask))
-        image, mask = trans(transformed['image']), trans(transformed['mask'])
-        
-        return {
-            'images': image,
-            'masks': mask
-        }
 
 def cal_batch_metric(predict_batch, label_batch, iou_list, conf_list, validframe_list):
     predict_batch = predict_batch.cpu().detach().numpy()
@@ -166,26 +44,6 @@ def cal_batch_metric(predict_batch, label_batch, iou_list, conf_list, validframe
             validframe_list.append(1.0)
         else:  # empty ground truth label
             validframe_list.append(0.0)
-            
-
-def write_txtlog(log_path, current_epoch, train_score, valid_score, train_loss, valid_loss, train_wiou, valid_wiou, train_atnr, valid_atnr, is_better):
-    with open(log_path, 'a') as f:
-        f.write(f'[{current_epoch+1}/{args.max_epoch}] Score:{train_score:.5f}/{valid_score:.5f} | Loss:{train_loss:.5f}/{valid_loss:.5f} | ') # change line
-        f.write(f'IOU:{train_wiou:.5f}/{valid_wiou:.5f} | ATNR:{train_atnr:.5f}/{valid_atnr:.5f}')
-        if is_better:
-            f.write('--> Best Updated')
-        f.write('\n')
-
-def plot_learning_curve(results):
-    for key, value in results.items():
-        plt.plot(range(len(value)), value, label=f'{key}')
-        plt.xlabel('Epoch')
-        plt.ylabel(f'{key}')
-        plt.title(f'Learning curve of {key}')
-        plt.legend()
-
-        plt.savefig(os.path.join(args.log_save, f'{key}.png'))
-        plt.close()
 
 def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=None):
     # list for learning curve
@@ -208,31 +66,16 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         
         for batch, data in enumerate(tqdm(train_loader)):
             # [batch, 3, h, w], [batch, 1, h, w]
-            images, masks = data['images'].to(device), data['masks'].to(device)
+            images, masks, dists = data['images'].to(device), data['masks'].to(device), data['dists'].to(device)
             # print(images.dtype, masks.dtype)
             # print(images.shape, masks.shape)
 
             # print(f'label:{torch.unique(masks[0])}')
             preds = model(images) # [batch, 1, h, w]
-
-            # check predict value distribution
-            # for img in range(preds.shape[0]):
-            #     print(f'pred:{torch.unique(preds[0])}')
-            #     print(f'{img}')
-            #     print(f'small count:{torch.count_nonzero(preds[img] < .99)}, large count:{torch.count_nonzero(preds[img] > .99)}')
-            #     torch.count_nonzero(preds[img] > 0) == 0
-            #     if True:
-            #         plt.subplot(1, 3, 1)
-            #         plt.imshow(images[img, 0].cpu().detach().numpy())
-            #         plt.subplot(1, 3, 2)
-            #         plt.imshow(masks[img, 0].cpu().detach().numpy())
-            #         plt.subplot(1, 3, 3)
-            #         plt.imshow(preds[img, 0].cpu().detach().numpy())
-                    
-            #         plt.show()
+            # preds = softmax(preds, dim=1)
             
             # print(preds.shape)
-            loss = criterion(preds, masks)
+            loss = criterion(preds, masks, dists)
             # print(f'loss:{loss:.3f}')
             optimizer.zero_grad()
             loss.backward()
@@ -265,11 +108,12 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         with torch.no_grad():
             valid_start_time = time()
             for data in tqdm(valid_loader):
-                images, masks = data['images'].to(device), data['masks'].to(device)
+                images, masks, dists = data['images'].to(device), data['masks'].to(device), data['dists'].to(device)
                 
                 preds = model(images)
+                # preds = softmax(preds, dim=1)
 
-                loss = criterion(preds, masks)
+                loss = criterion(preds, masks, dists)
 
                 valid_loss += loss.item()
 
@@ -325,41 +169,31 @@ if __name__ == '__main__':
     
     '''Fix Random Seed'''
     set_seed(2023)
+
     '''Get DataLoader'''
     train_loader, valid_loader = get_dataloader(args.data_path, batch_size=args.batch_size, split='train', valid_ratio=0.1)
-    # for batch, data in enumerate(train_loader):
-    #     print(data['masks'].shape)
-        # fig = plt.figure()
-        # plt.imshow(data['masks'][0].permute(1,2,0))
-        # plt.show()
-        # print(type(data['images']), type(data['masks']))
-        # print(data['images'].shape, data['masks'].shape)
-        # print(len(data['masks'].split()))
 
     '''Pretrained Model Selection'''
     # https://github.com/mateuszbuda/brain-segmentation-pytorch
-    model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=False)
-    # model.conv = Conv2d(32, 2, kernel_size=1)
+    model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=True)
+    # model.conv = Conv2d(32, 2, kernel_size=1) # two class segmentation (mask/ !mask)
     # https://github.com/milesial/Pytorch-UNet
     # model = torch.hub.load('milesial/Pytorch-UNet', 'unet_carvana', pretrained=True, scale=0.5)
     # model.outc.conv = Conv2d(64, 1, kernel_size=(1, 1), stride=(1, 1)) # unet_carvana outpur is 4 channel
     
-    '''Model Setting & Summary'''
+    '''Model Setting'''
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model, device_ids=[0, 1]) # enable two GPU parallel
     model.to(device)
 
-    # Show summary
+    '''Show summary'''
     # summary(model, input_size=(3, 240, 320))
     # print(model)
     
-    '''Selecting optimizer ...'''
+    '''Select optimizer ...'''
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.decay)
-    criterion = DiceCeLoss(dice_weight=0.5)
-    # GeneralizedDice(idc=[0])
-    # BinaryDiceLoss()
-    # nn.BCEWithLogitsLoss()
-    # nn.CrossEntropyLoss()
+    criterion = DiceBoundaryCeLoss(boundary_weight=args.boundary_weight)
+    # DiceCeLoss(dice_weight=0.5)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.max_epoch)
     
     '''Start Training'''

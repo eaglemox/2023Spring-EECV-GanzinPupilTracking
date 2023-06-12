@@ -1,7 +1,11 @@
-# exclude folder
-*/
-# other random shit
-*.zip
-
-!.py
-!.sh
+# exclude all
+*
+# except files
+!.gitignore
+!config.py
+!datasets.py
+!inference.py
+!loss.py
+!main.py
+!post.py
+!utils.py

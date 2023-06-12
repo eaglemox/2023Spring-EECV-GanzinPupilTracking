@@ -111,11 +111,8 @@ def eq(a: Tensor, b) -> bool:
 
 
 def simplex(t: Tensor, axis=1) -> bool:
-    print(t.shape)
     _sum = cast(Tensor, t.sum(axis).type(torch.float32))
     _ones = torch.ones_like(_sum, dtype=torch.float32)
-    print(_sum)
-    print(torch.unique(_sum))
     return torch.allclose(_sum, _ones)
 
 
