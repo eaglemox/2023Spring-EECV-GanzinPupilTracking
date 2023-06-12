@@ -108,7 +108,7 @@ def benchmark(dataset_path: str, output_path:str, subjects: list):
 
 if __name__ == '__main__':
     dataset_path = './dataset'
-    predict_path = './mask_7'
+    predict_path = './mask_8'
     subjects = ['S1', 'S2', 'S3', 'S4']
     # evaluate predict images from inference.py 
     benchmark(dataset_path, predict_path, subjects)

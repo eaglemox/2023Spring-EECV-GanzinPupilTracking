@@ -4,8 +4,8 @@ import numpy as np
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import albumentations as A
-
-
+from torch import optim
+from model import *
 from loss import *
 # from losses import *
 from eval import *
@@ -52,7 +52,7 @@ def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
     image_path, mask_path = get_train_path(data_dir)
     if split == 'train':
         transform = A.Compose([
-            A.Resize(240, 320),
+            A.Resize(480,640),
             A.Rotate(limit=20, p=0.3, border_mode=cv2.BORDER_CONSTANT),
             A.HorizontalFlip(p=0.3),
             A.VerticalFlip(p=0.3),
@@ -68,7 +68,7 @@ def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
             ])
                                 
         img_transform = transforms.Compose([
-            transforms.Resize((240, 320)),
+            transforms.Resize((240,320)),
             transforms.RandomEqualize(p=1.0),
             transforms.RandomRotation(20),
             transforms.RandomHorizontalFlip(p=0.3),
@@ -78,7 +78,7 @@ def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
             # TODO: add other augmentations
         ])
         mask_transform = transforms.Compose([
-            transforms.Resize((240, 320)),
+            transforms.Resize((240,320)),
             transforms.RandomRotation(20),
             transforms.RandomHorizontalFlip(p=0.3),
             transforms.RandomVerticalFlip(p=0.3),
@@ -101,7 +101,7 @@ def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
         num_train = len(dataset) - num_valid
         train_set, valid_set = random_split(dataset, [num_train, num_valid])
         train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
-        valid_loader = DataLoader(valid_set, batch_size=1, shuffle=False, num_workers=4, pin_memory=True)
+        valid_loader = DataLoader(valid_set, batch_size=1, shuffle=True, num_workers=4, pin_memory=True)
         return train_loader, valid_loader
     else:
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True, drop_last=False)
@@ -175,6 +175,14 @@ def write_txtlog(log_path, current_epoch, train_score, valid_score, train_loss, 
         if is_better:
             f.write('--> Best Updated')
         f.write('\n')
+
+# def write_txtlog(log_path, current_epoch, train_score,train_loss, train_wiou, train_atnr, is_better):
+#     with open(log_path, 'a') as f:
+#         f.write(f'[{current_epoch+1}/{args.max_epoch}] Score:{train_score:.5f}  | Loss:{train_loss:.5f}/ | ') # change line
+#         f.write(f'IOU:{train_wiou:.5f} | ATNR:{train_atnr:.5f}')
+#         if is_better:
+#             f.write('--> Best Updated')
+#         f.write('\n')
 
 def plot_learning_curve(results):
     for key, value in results.items():
@@ -287,13 +295,15 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
 
         # print each epoch's result: loss, score
         print(f'[{epoch + 1}/{args.max_epoch}] {train_time:.2f}/{valid_time:.2f} sec(s) Score: {train_score:.3f}/{valid_score:.3f} | Loss: {train_loss:.3f}/{valid_loss:.3f}')
+        # print(f'[{epoch + 1}/{args.max_epoch}] {train_time:.2f} sec(s) Score: {train_score:.3f} | Loss: {train_loss:.3f}')
+        
         
         # update scheduler
         scheduler.step()
 
         # check & update best loss
-        is_better = valid_loss <= best_loss
-        best_loss = valid_loss
+        is_better = train_loss <= best_loss
+        best_loss = train_loss
 
         # save model
         if is_better:
@@ -307,7 +317,8 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         os.makedirs(args.log_save, exist_ok=True)
         write_txtlog(os.path.join(args.log_save, 'log.txt'), epoch, train_score, valid_score, train_loss, valid_loss\
                      , train_wiou, valid_wiou, train_atnr, valid_atnr, is_better)
-        
+        # write_txtlog(os.path.join(args.log_save, 'log.txt'), epoch, train_score, train_loss,\
+        #              train_wiou, train_atnr, is_better)       
         # plot learning curve (every epoch)
         result_lists = {
                 'train_score': train_score_list,
@@ -338,7 +349,9 @@ if __name__ == '__main__':
 
     '''Pretrained Model Selection'''
     # https://github.com/mateuszbuda/brain-segmentation-pytorch
-    model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=False)
+    # model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=True)
+    model = RTFNet(n_class=1)
+    # model = UNet(n_channels=3, n_classes=2)
     # model.conv = Conv2d(32, 2, kernel_size=1)
     # https://github.com/milesial/Pytorch-UNet
     # model = torch.hub.load('milesial/Pytorch-UNet', 'unet_carvana', pretrained=True, scale=0.5)
@@ -354,12 +367,16 @@ if __name__ == '__main__':
     # print(model)
     
     '''Selecting optimizer ...'''
+    # optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=1e-8, momentum=0.9)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.decay)
-    criterion = DiceCeLoss(dice_weight=0.5)
+    # criterion = DiceCeLoss(dice_weight=0.5)
+    # criterion = DiceBCELoss()
+    criterion = nn.MSELoss()
     # GeneralizedDice(idc=[0])
     # BinaryDiceLoss()
     # nn.BCEWithLogitsLoss()
     # nn.CrossEntropyLoss()
+    # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=2)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.max_epoch)
     
     '''Start Training'''
