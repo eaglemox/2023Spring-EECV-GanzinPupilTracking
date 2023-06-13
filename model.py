@@ -1,4 +1,3 @@
-import config as cfg
 from torch.nn import ConvTranspose2d
 from torch.nn import Conv2d
 from torch.nn import MaxPool2d

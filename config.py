@@ -11,9 +11,9 @@ parser.add_argument('--decay', type=float, default=1e-5, help='weight decay')
 parser.add_argument('--boundary_weight', type=float, default=0.05, help='boundary loss weight')
 
 # file directory
-parser.add_argument('--data_path', type=str, default='./dataset', help='relative path to dataset folder')
-parser.add_argument('--model_save', type=str, default='./test10', help='folder to save best model\'s .pth file')
-parser.add_argument('--log_save', type=str, default='./test10', help='folder to save csvlog file')
+parser.add_argument('--data_path', type=str, default='./dataset', help='path to dataset folder')
+parser.add_argument('--model_save', type=str, default='./test', help='folder to save best model\'s .pth file')
+parser.add_argument('--log_save', type=str, default='./test', help='folder to save csvlog file')
 
 
 # arguments variable

@@ -19,6 +19,25 @@ from torch.optim.lr_scheduler import CyclicLR, CosineAnnealingLR
 
 plt.switch_backend('agg')
 
+def write_txtlog(log_path, current_epoch, train_score, valid_score, train_loss, valid_loss, train_wiou, valid_wiou, train_atnr, valid_atnr, is_better):
+    with open(log_path, 'a') as f:
+        f.write(f'[{current_epoch+1}/{args.max_epoch}] Score:{train_score:.5f}/{valid_score:.5f} | Loss:{train_loss:.5f}/{valid_loss:.5f} | ') # change line
+        f.write(f'IOU:{train_wiou:.5f}/{valid_wiou:.5f} | ATNR:{train_atnr:.5f}/{valid_atnr:.5f}')
+        if is_better:
+            f.write('--> Best Updated')
+        f.write('\n')
+
+def plot_learning_curve(results):
+    for key, value in results.items():
+        plt.plot(range(len(value)), value, label=f'{key}')
+        plt.xlabel('Epoch')
+        plt.ylabel(f'{key}')
+        plt.title(f'Learning curve of {key}')
+        plt.legend()
+
+        plt.savefig(os.path.join(args.log_save, f'{key}.png'))
+        plt.close()
+        
 def cal_batch_metric(predict_batch, label_batch, iou_list, conf_list, validframe_list):
     predict_batch = predict_batch.cpu().detach().numpy()
     label_batch = label_batch.cpu().detach().numpy()
@@ -66,17 +85,12 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         
         for batch, data in enumerate(tqdm(train_loader)):
             # [batch, 3, h, w], [batch, 1, h, w]
-            images, masks, dists = data['images'].to(device), data['masks'].to(device), data['dists'].to(device)
-            # print(images.dtype, masks.dtype)
-            # print(images.shape, masks.shape)
+            images, masks = data['images'].to(device), data['masks'].to(device)
 
-            # print(f'label:{torch.unique(masks[0])}')
             preds = model(images) # [batch, 1, h, w]
-            # preds = softmax(preds, dim=1)
             
-            # print(preds.shape)
-            loss = criterion(preds, masks, dists)
-            # print(f'loss:{loss:.3f}')
+            loss = criterion(preds, masks)
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -86,8 +100,6 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
             
             # calculate iou, conf, N_valid
             cal_batch_metric(preds, masks, train_iou, train_conf, train_validframe)
-            # test append in fucntion work
-            # print(len(train_iou))
 
         # score metrics
         train_wiou = np.sum(train_iou) / len(train_validframe)
@@ -108,12 +120,11 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         with torch.no_grad():
             valid_start_time = time()
             for data in tqdm(valid_loader):
-                images, masks, dists = data['images'].to(device), data['masks'].to(device), data['dists'].to(device)
+                images, masks = data['images'].to(device), data['masks'].to(device)
                 
                 preds = model(images)
-                # preds = softmax(preds, dim=1)
 
-                loss = criterion(preds, masks, dists)
+                loss = criterion(preds, masks)
 
                 valid_loss += loss.item()
 
@@ -131,7 +142,6 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
 
         # print each epoch's result: loss, score
         print(f'[{epoch + 1}/{args.max_epoch}] {train_time:.2f}/{valid_time:.2f} sec(s) Score: {train_score:.3f}/{valid_score:.3f} | Loss: {train_loss:.3f}/{valid_loss:.3f}')
-        # print(f'[{epoch + 1}/{args.max_epoch}] {train_time:.2f} sec(s) Score: {train_score:.3f} | Loss: {train_loss:.3f}')
         
         
         # update scheduler
@@ -153,8 +163,7 @@ def train(model, train_loader, valid_loader, criterion, optimizer, scheduler=Non
         os.makedirs(args.log_save, exist_ok=True)
         write_txtlog(os.path.join(args.log_save, 'log.txt'), epoch, train_score, valid_score, train_loss, valid_loss\
                      , train_wiou, valid_wiou, train_atnr, valid_atnr, is_better)
-        # write_txtlog(os.path.join(args.log_save, 'log.txt'), epoch, train_score, train_loss,\
-        #              train_wiou, train_atnr, is_better)       
+        
         # plot learning curve (every epoch)
         result_lists = {
                 'train_score': train_score_list,

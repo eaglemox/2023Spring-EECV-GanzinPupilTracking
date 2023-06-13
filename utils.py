@@ -4,7 +4,6 @@ import numpy as np
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
-from config import args
 from scipy.ndimage import distance_transform_edt as eucl_distance
 
 plt.switch_backend('agg')
@@ -29,24 +28,6 @@ def mask2dist(mask):
     # print(f'func shape{res.shape}')
     return res
 
-def write_txtlog(log_path, current_epoch, train_score, valid_score, train_loss, valid_loss, train_wiou, valid_wiou, train_atnr, valid_atnr, is_better):
-    with open(log_path, 'a') as f:
-        f.write(f'[{current_epoch+1}/{args.max_epoch}] Score:{train_score:.5f}/{valid_score:.5f} | Loss:{train_loss:.5f}/{valid_loss:.5f} | ') # change line
-        f.write(f'IOU:{train_wiou:.5f}/{valid_wiou:.5f} | ATNR:{train_atnr:.5f}/{valid_atnr:.5f}')
-        if is_better:
-            f.write('--> Best Updated')
-        f.write('\n')
-
-def plot_learning_curve(results):
-    for key, value in results.items():
-        plt.plot(range(len(value)), value, label=f'{key}')
-        plt.xlabel('Epoch')
-        plt.ylabel(f'{key}')
-        plt.title(f'Learning curve of {key}')
-        plt.legend()
-
-        plt.savefig(os.path.join(args.log_save, f'{key}.png'))
-        plt.close()
 
 def alpha_blend(input_image: np.ndarray, segmentation_mask: np.ndarray, alpha: float = 0.5):
     """Alpha Blending utility to overlay segmentation masks on input images

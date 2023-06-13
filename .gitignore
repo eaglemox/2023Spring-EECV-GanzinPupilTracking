@@ -10,3 +10,8 @@
 !model.py
 !post.py
 !utils.py
+!get_dataset.sh
+!train.sh
+!inference.sh
+!post_process.sh
+!README.md
