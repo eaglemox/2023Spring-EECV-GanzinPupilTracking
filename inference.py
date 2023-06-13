@@ -2,7 +2,12 @@ import os
 import torch
 import cv2
 import numpy as np
+<<<<<<< HEAD
 
+=======
+import matplotlib.pyplot as plt
+from model import *
+>>>>>>> 4e58773a225fd63324a9596db7de1819efa13ff7
 from loss import *
 from eval import *
 from utils import *
@@ -24,8 +29,9 @@ if __name__ == '__main__':
     '''Hyperparameters'''
     batch_size = 64
 
-    model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=False)
-    
+    # model = torch.hub.load('mateuszbuda/brain-segmentation-pytorch', 'unet', in_channels=3, out_channels=1, init_features=32, pretrained=False)
+    model = RTFNet(n_class=1)
+    # model = UNet(n_channels=3, n_classes=1)
     '''Read Parameters (.pth)'''
     best_model = './test8/model_best_49.pth'
     # print(torch.load(best_model))
@@ -37,10 +43,14 @@ if __name__ == '__main__':
 
     '''Inference S5-S8'''
     data_path = './dataset'
+<<<<<<< HEAD
     output_path = './mask_t2'
+=======
+    output_path = './mask_9'
+>>>>>>> 4e58773a225fd63324a9596db7de1819efa13ff7
     # read to sequence level
-    for subject in ['S1', 'S2', 'S3', 'S4']:
-    # for subject in ['S5', 'S6', 'S7', 'S8']:
+    # for subject in ['S1', 'S2', 'S3', 'S4']:
+    for subject in ['S5', 'S6', 'S7', 'S8']:
         print(f'Processing {subject}...')
         subject_path = os.path.join(data_path, subject)
         inference_loader = get_inference_dataloader(subject_path,batch_size)
@@ -57,7 +67,8 @@ if __name__ == '__main__':
                 for batch in range(preds.shape[0]):
                     preds_tmp = preds.cpu().detach().numpy()
                     predict = preds_tmp[batch]
-
+                    # print(predict.shape)
+                    # predict = cv2.medianBlur(predict,5)
                     file_path = paths[batch]
 
                     # predict mask thresholding                    

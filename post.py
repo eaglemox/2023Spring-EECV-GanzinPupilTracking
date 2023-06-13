@@ -47,7 +47,7 @@ def post(mask):
         return img, 1.0
     
 if __name__ == '__main__':
-    data_path = "./S14_mask"
+    data_path = "./mask_7"
     iou_meter = AverageMeter()
     iou_meter_sequence = AverageMeter()
     label_validity = []
@@ -69,8 +69,8 @@ if __name__ == '__main__':
                         
                         output = cv2.imread(fullpath)
                         output, conf = post(output)
-                        label = cv2.imread(fullpath.replace("S14_mask", "dataset"))
-                        cv2.imwrite(fullpath.replace("S14_mask", "post"), output)
+                        label = cv2.imread(fullpath.replace("mask_7", "dataset"))
+                        cv2.imwrite(fullpath.replace("mask_7", "post"), output)
                         if np.sum(label.flatten()) > 0:
                             iou = mask_iou(output, label)
                             iou_meter.update(conf * iou)

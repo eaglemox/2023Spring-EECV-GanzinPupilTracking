@@ -7,5 +7,6 @@
 !inference.py
 !loss.py
 !main.py
+!model.py
 !post.py
 !utils.py

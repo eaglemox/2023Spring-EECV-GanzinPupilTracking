@@ -48,19 +48,13 @@ def get_dataloader(data_dir, batch_size, split='test', valid_ratio=0.1):
     image_path, mask_path = get_train_path(data_dir)
     if split == 'train':
         transform = A.Compose([
-            A.Resize(240, 320),
+            A.Resize(480, 640),
             A.Rotate(limit=20, p=0.3, border_mode=cv2.BORDER_CONSTANT),
             A.HorizontalFlip(p=0.3),
             A.VerticalFlip(p=0.3),
-            A.Perspective(scale=(0.05, 0.2), keep_size=True, fit_output=False),
+            # A.Perspective(scale=(0.05, 0.2), keep_size=True, fit_output=False),
             A.RandomGamma(gamma_limit=(40, 60), p=1.0), # 40 mean gamma = 40 / 100 = 0.4
-            # A.Equalize(p=1),
             A.Normalize(mean=0.5, std=0.5),
-            # A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.3, border_mode=cv2.BORDER_CONSTANT),
-            # A.HueSaturationValue(p=0.4),
-            # # A.Sharpen(p=0.3),
-            # A.RandomBrightnessContrast(brightness_limit=0.4, contrast_limit=0.4, p=0.3),
-            # ToTensorV2(),
             ])
                                 
         img_transform = transforms.Compose([
@@ -142,19 +136,10 @@ class GanzinDataset(Dataset):
         totensor = transforms.Compose([transforms.ToTensor()])
         transformed = self.transform(image=np.array(image), mask=np.array(mask))
         image, mask = totensor(transformed['image']), totensor(transformed['mask'])
-
-        # mask = F.one_hot(mask[0].long(), num_classes=2).permute(2, 0, 1)
-        # print(mask.shape)
-        # print(mask.shape)
-        # image, mask = trans(transformed['image']), transformed['mask']
-        
-        dist_map = torch.Tensor(mask2dist(mask))
-        # mask = trans(mask)
         
         return {
             'images': image,
-            'masks': mask.float(),
-            'dists': dist_map
+            'masks': mask,
         }
 
 class InferenceGanzinDataset(Dataset):
