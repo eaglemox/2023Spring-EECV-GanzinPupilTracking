@@ -1,4 +1,4 @@
-# Computer Vison Final Project - Ganzin Pupil Tracking
+# Computer Vison Final Project - Ganzin Pupil Tracking - [[GitHub]](https://github.com/eaglemox/2023Spring-EECV-GanzinPupilTracking)
 ## File Structure
 If using default folder naming
 ``` 
